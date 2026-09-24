@@ -19,6 +19,7 @@ https://github.com/user-attachments/assets/8685261b-9338-4fea-8dfe-1c590d5df543
 - **Claude Code look & feel** — same tool names, calling conventions, and UI patterns (`Agent`, `get_subagent_result`, `steer_subagent`) — feels native
 - **Background tasks** — durable background shell jobs (`/bg`, `bg_run`), a footer dock, a read-only delegated child agent (`bg_delegate` + `bg_result`), fixed-purpose multi-model Fusion (`fusion_reason`, `fusion_investigate`, `fusion_research`, `fusion_validate`), and local attested Pi runs (`bg_run_pi_attested`). Ported from [pi-background-tasks](https://github.com/ismailsaleekh/pi-background-tasks) (ISC). Its task manager is `/bg-tasks`, not `/tasks`, which stays this extension's structured-task command. Select capabilities with `PI_BG_FEATURES` (`process,delegate,fusion,attested,attribution`; `process` is mandatory) and the dock key with `PI_BG_DOCK_SHORTCUT` (`shift+down` default, `ctrl+alt+b`, `off`).
 - **Structured task tracking** — bundled `TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`, `TaskOutput`, `TaskStop`, and `TaskExecute` tools with dependencies, persistent storage, a live task widget, reminders, auto-clear, optional subagent cascade, and attempt-aware single-executor binding that prevents duplicate or stale task completion. **[Task guide](docs/tasks.md)**
+- **Plannotator handoff** — with [`@plannotator/pi-extension`](https://github.com/backnotprop/plannotator) set to `"executionMode": "external"`, approved plans arrive here as structured tasks: plannotator's own plan tracking never starts, the checklist becomes the task list, and execution keeps single-executor binding. A startup warning tells you when a live plannotator is still in `automatic` mode, where it runs plans itself. **[Plannotator handoff](#plannotator-handoff)**
 - **Dynamic coordination** — the main session chooses the next action from current evidence, using direct tools and optional task delegation. No fixed role pipeline, mandatory Worker, or workflow script is required. **[Choosing an approach](#dynamic-workflows)**
 - **Adaptive Markdown Playbooks** — reusable `<name>/WORKFLOW.md` coordinator guidance with frontmatter metadata and optional `prompts/*.md` resources. `WorkflowPlaybook` lists and reads the guidance; the main coordinator adapts it to current evidence and chooses ordinary tools, optional skills, and Agent calls only when useful. Reading Markdown does not launch work or require every instruction to run. `WorkflowPlaybookSave` promotes generalized Markdown to project/global scope only after direct preview confirmation. **[Playbook guide](docs/playbooks.md)**
 - **Parallel background agents** — spawn multiple agents that run concurrently with automatic queuing (configurable concurrency limit, default 10) and smart group join (consolidated notifications)
@@ -544,6 +545,14 @@ The last two rows are separate because zero built-ins is not zero tools: `tools:
 The extension includes the task system from [`@tintinweb/pi-tasks`](https://github.com/tintinweb/pi-tasks). It is registered only in the top-level session: child subagent sessions do not get a second task store, task widget, or task orchestration layer.
 
 Use tasks for a mutable work list whose status and dependencies evolve during a conversation. Use [`SubagentWorkflow`](#subagentworkflow) when the orchestration itself should be a deterministic script that loops, pipelines, gates, or replays many agents.
+
+### Plannotator handoff
+
+With [`@plannotator/pi-extension`](https://github.com/backnotprop/plannotator) set to `"executionMode": "external"` (in `~/.pi/agent/plannotator.json` or the project `.pi/plannotator.json`), approving a plan hands it off here: plannotator emits `plannotator:plan-approved` and returns to idle, and this extension mirrors the plan's markdown checkboxes into the task list, tagged `metadata.plannotator = { planId, step }`. The handoff goes through idle, so none of plannotator's own plan tracking starts — no progress widget, no `plannotator_mark_done` phase, and no write into the [pi-todos](https://github.com/mitsuhiko/agent-stuff) store at `<cwd>/.pi/todos/` — which leaves the task widget as the single live view of the plan. Mirrored tasks are ordinary pending tasks, executable via `TaskExecute`, a `SubagentWorkflow` claim, or manual work.
+
+Sync is one-way (plan → tasks) and idempotent: re-approving an edited plan reconciles by step ordinal — new steps are created, retitled steps updated, checked steps mark their mirror completed, and steps that disappear are deleted while their mirror is still pending and unbound. Finished work never creates a task: the plan file stays the record of what is already done. Tasks bound to an executor are never retitled, removed, or completed from under it, and task completion is never written back into the plan file.
+
+In plannotator's default `automatic` mode approved plans never leave plannotator — it executes them itself, keeping its own progress widget and `plannotator_mark_done` phase, neither of which any config key turns off — and the bridge warns once when it detects a live plannotator that is not in `external` mode. `"todoProvider": "off"` in `plannotator.json` (or `PLANNOTATOR_TODO_PROVIDER=off`) additionally stops its pi-todos mirror, the one part of that tracking which reaches disk.
 
 ### Task tools
 
@@ -1270,6 +1279,7 @@ src/
   mention-clone.ts    # Run a mention's turn in a cloned conversation, off the main chat
   group-chat/         # Hosted rooms: /chat, RoomEnsure, seat bus, session binding
   cross-extension-rpc.ts # RPC handlers for cross-extension spawn/ping via pi.events
+  plannotator-bridge.ts # Approved-plan handoff: plannotator:plan-approved → task list mirror
   subagent-contract.ts # Shared RPC protocol version and migration errors for runtime/task clients
 
   # Scheduling

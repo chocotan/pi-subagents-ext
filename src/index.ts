@@ -41,6 +41,7 @@ import { describeModel, type ModelRegistry, resolveModel } from "./model-resolve
 import { checkModelScope, isScopeModelsEnabled, setScopeModelsEnabled } from "./model-scope.js";
 import { getMaxSubagentDepth, setMaxSubagentDepth } from "./nested-tools.js";
 import { createOutputFilePath, ensureOutputFile, getOutputTranscriptDefault, sessionTaskDir, setOutputTranscriptDefault, streamToOutputFile, writeInitialEntry } from "./output-file.js";
+import { registerPlannotatorBridge } from "./plannotator-bridge.js";
 import { registerProfiles } from "./profiles/index.js";
 import { formatArtifactWriteError, sanitizeArtifactText, WORKFLOW_AGGREGATE_ERROR_DISABLED, writeWorkflowAggregateArtifact } from "./result-artifact.js";
 import { SubagentScheduler } from "./schedule.js";
@@ -340,6 +341,7 @@ export default function (pi: ExtensionAPI) {
       stop: stopWorkflowTaskOutput,
     },
   });
+  registerPlannotatorBridge(pi, { taskList: taskExecutions.taskList });
 
   // ---- Register custom notification renderer ----
   pi.registerMessageRenderer<NotificationDetails>(

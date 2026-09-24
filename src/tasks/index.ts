@@ -311,6 +311,42 @@ export interface TaskExecutionCoordinator {
   settle(ref: TaskExecutionRef, outcome: TaskExecutionSettle): boolean;
 }
 
+/**
+ * Plain list operations on the current task store, for in-process integrations
+ * (e.g. the plannotator bridge) that mirror external state into the task list.
+ * Every method targets the store that is active at call time and refreshes the
+ * widget on change. Tasks bound to an executor are never mutated through this
+ * surface: `update` and `delete` refuse them, leaving execution ownership to
+ * the TaskExecutionCoordinator.
+ */
+export interface TaskListHandle {
+  /** Deep-cloned tasks of the active store, sorted by id. */
+  list(): Task[];
+  /** Create a pending task and refresh the widget. */
+  create(input: {
+    subject: string;
+    description: string;
+    activeForm?: string;
+    metadata?: Task["metadata"];
+  }): Task;
+  /** Retitle, re-describe, or re-status an unbound task. Returns false when the
+   *  task is missing or owned by an executor. `status` is how a mirror records
+   *  progress reported by the source it tracks. */
+  update(id: string, fields: {
+    status?: TaskStatus;
+    subject?: string;
+    description?: string;
+    activeForm?: string;
+    metadata?: Record<string, unknown>;
+  }): boolean;
+  /** Delete an unbound task. Returns false when the task is missing or owned
+   *  by an executor (TaskStore.delete enforces the same guard). */
+  delete(id: string): boolean;
+}
+
+/** registerTasks return: the execution coordinator plus the plain list handle. */
+export type TasksRegistration = TaskExecutionCoordinator & { taskList: TaskListHandle };
+
 export interface RegisterTasksOptions {
   workflowOutput?: WorkflowTaskOutputAdapter;
   workflowAggregateReader?: (input: {
@@ -2932,7 +2968,30 @@ Set up task dependencies:
       }
       return committed;
     },
-  } satisfies TaskExecutionCoordinator;
+    taskList: {
+      // `store` is captured as a binding, so every call lands on the store that
+      // is active at that moment — including after a session/workspace switch
+      // replaced it under initializeStoreForContext.
+      list: () => store.list(),
+      create(input) {
+        const task = store.create(input.subject, input.description, input.activeForm, input.metadata);
+        widget.update();
+        return task;
+      },
+      update(id, fields) {
+        const existing = store.get(id);
+        if (!existing || existing.execution !== undefined) return false;
+        const result = store.update(id, fields);
+        if (result.task !== undefined && result.changedFields.length > 0) widget.update();
+        return result.task !== undefined;
+      },
+      delete(id) {
+        const deleted = store.delete(id);
+        if (deleted) widget.update();
+        return deleted;
+      },
+    },
+  } satisfies TasksRegistration;
 }
 
 export default registerTasks;

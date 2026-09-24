@@ -5,6 +5,7 @@ import {
   type SessionEntry,
 } from '@earendil-works/pi-coding-agent';
 import { isJsonObject, type JsonObject } from '../common';
+import { UnsupportedConversationBlockError } from './visible-conversation-v2';
 
 /**
  * Pi session adapter shared by every consumer of the visible-conversation
@@ -40,9 +41,29 @@ export interface ParentSnapshotOptions {
 }
 
 export interface ParentSnapshot {
+  systemPrompt: string;
   messages: readonly Message[];
   leafId: string | null;
   activeToolCallLeafExcluded: boolean;
+}
+
+function isConversationMessage(message: { readonly role: string }): boolean {
+  switch (message.role) {
+    case 'system':
+      return false;
+    case 'user':
+    case 'assistant':
+    case 'toolResult':
+    case 'custom':
+    case 'bashExecution':
+    case 'branchSummary':
+    case 'compactionSummary':
+      return true;
+    default:
+      // Pi's converter drops unknown host roles. Reject before that lossy step;
+      // only the known prompt-state role is intentionally outside conversation.
+      throw new UnsupportedConversationBlockError(`message role ${message.role}`);
+  }
 }
 
 function entriesById(entries: readonly SessionEntry[]): Map<string, SessionEntry> {
@@ -134,8 +155,15 @@ export function snapshotParentConversation(
   const entries = ctx.sessionManager.getEntries();
   const leaf = resolveEffectiveLeaf(ctx.sessionManager, options);
   const sessionContext = buildSessionContext(entries, leaf.leafId, entriesById(entries));
+  // Pi 0.86 persists prompt sections and tool declarations as system messages,
+  // including a leading checkpoint after compaction. They are prompt state, not
+  // conversation. Keep Pi's effective prompt once in the consumer envelope; do
+  // not feed historical prompt/tool deltas into the frozen conversation ledger.
+  // The structural role check also accepts older Message type unions.
+  const conversation = sessionContext.messages.filter(isConversationMessage);
   return {
-    messages: convertToLlm(sessionContext.messages),
+    systemPrompt: ctx.getSystemPrompt(),
+    messages: convertToLlm(conversation),
     leafId: leaf.leafId,
     activeToolCallLeafExcluded: leaf.activeToolCallLeafExcluded,
   };

@@ -423,7 +423,7 @@ export function createWorkflowHost(deps: WorkflowHostOptions): WorkflowHost {
       if (record === undefined) {
         return {
           ok: false,
-          error: `Agent ${id} has no session left to resume — records are dropped ten minutes after they finish.`,
+          error: `Agent ${id} has no session left to resume — records are dropped thirty minutes after they finish.`,
         };
       }
       settledRecords.set(agentId, record);

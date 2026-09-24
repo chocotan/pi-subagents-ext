@@ -25,6 +25,7 @@ vi.mock("../src/agent-runner.js", async () => {
 // when it comes back empty. mention-clone.test.ts covers the clone itself.
 vi.mock("../src/mention-clone.js", () => ({ runMentionClone: vi.fn() }));
 
+import { RECORD_RETENTION_MS } from "../src/agent-manager.js";
 import { getDefaultMaxTurns, resumeAgent, runAgent, setDefaultMaxTurns } from "../src/agent-runner.js";
 import subagentsExtension from "../src/index.js";
 import { runMentionClone } from "../src/mention-clone.js";
@@ -1016,7 +1017,7 @@ describe("resuming an evicted agent by name", () => {
     const record = manager.getRecord(id);
     record.sessionFile = sessionPath();
     writeFileSync(record.sessionFile, "");
-    record.completedAt = Date.now() - 11 * 60_000;
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS + 60_000);
     await vi.advanceTimersByTimeAsync(60_000);
     return manager;
   }

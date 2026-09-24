@@ -131,7 +131,7 @@ export type AgentMentionMode = 'model' | 'direct' | 'off';
 
 /**
  * What survives a record's eviction so `@handle` keeps working. The live record
- * is discarded after ~10 minutes, but the pi session it wrote is still on disk,
+ * is discarded after ~30 minutes, but the pi session it wrote is still on disk,
  * and this is the little that is needed to find and describe it again.
  */
 export interface AgentTombstone {

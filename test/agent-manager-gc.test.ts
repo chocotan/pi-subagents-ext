@@ -1,4 +1,4 @@
-// The 10-minute record GC (AgentManager.cleanup) has never run in a test: the
+// The 30-minute record GC (AgentManager.cleanup) has never run in a test: the
 // main agent-manager suite uses real timers throughout, and nothing calls the
 // private method. Its two guards are load-bearing in opposite directions —
 // inverting the cutoff disposes results the LLM hasn't read yet, and dropping
@@ -9,7 +9,7 @@
 // timers are hostile to the promise-settling style of the main suite.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentManager } from "../src/agent-manager.js";
+import { AgentManager, RECORD_RETENTION_MS } from "../src/agent-manager.js";
 
 vi.mock("../src/agent-runner.js", () => ({
   runAgent: vi.fn(),
@@ -27,7 +27,6 @@ import { runAgent } from "../src/agent-runner.js";
 const mockPi = {} as any;
 const mockCtx = { cwd: "/tmp" } as any;
 
-const TEN_MINUTES = 10 * 60_000;
 const TICK = 60_000;
 
 describe("AgentManager — record GC", () => {
@@ -60,9 +59,9 @@ describe("AgentManager — record GC", () => {
   it("keeps a record that completed inside the retention window", async () => {
     manager = new AgentManager();
     const { id, record } = await settled("recent");
-    // Age at sweep time is (TEN_MINUTES - 2*TICK) + TICK — just inside the window.
+    // Age at sweep time is (RECORD_RETENTION_MS - 2*TICK) + TICK — just inside the window.
     // Advancing the timers moves Date.now() too, so the margin has to outlast it.
-    record.completedAt = Date.now() - (TEN_MINUTES - 2 * TICK);
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS - 2 * TICK);
 
     await vi.advanceTimersByTimeAsync(TICK);
 
@@ -74,7 +73,7 @@ describe("AgentManager — record GC", () => {
     const { id, record } = await settled("stale");
     const dispose = vi.fn();
     record.session = { dispose } as any;
-    record.completedAt = Date.now() - (TEN_MINUTES + 30_000);
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS + 30_000);
 
     await vi.advanceTimersByTimeAsync(TICK);
 
@@ -84,7 +83,7 @@ describe("AgentManager — record GC", () => {
   });
 
   it("closes the evicted session's extension lifecycle before disposing it (#242)", async () => {
-    // The reported crash, on its own path: this sweep is what fires ~10 min after a
+    // The reported crash, on its own path: this sweep is what fires ~30 min after a
     // subagent finishes. Disposing only invalidates the ExtensionRunner, so whatever
     // an extension armed in `session_start` stayed armed — and its next tick threw
     // `assertActive()` from a bare timer callback, killing interactive pi.
@@ -96,7 +95,7 @@ describe("AgentManager — record GC", () => {
       dispose,
       extensionRunner: { hasHandlers: (event: string) => event === "session_shutdown", emit },
     } as any;
-    record.completedAt = Date.now() - (TEN_MINUTES + 30_000);
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS + 30_000);
 
     await vi.advanceTimersByTimeAsync(TICK);
 
@@ -115,7 +114,7 @@ describe("AgentManager — record GC", () => {
     const id = manager.spawn(mockPi, mockCtx, "X", "live", { description: "live", isBackground: true });
     const record = manager.getRecord(id)!;
     expect(record.status).toBe("running");
-    record.completedAt = Date.now() - 10 * TEN_MINUTES;
+    record.completedAt = Date.now() - 10 * RECORD_RETENTION_MS;
     const dispose = vi.fn();
     record.session = { dispose } as any;
 
@@ -132,7 +131,7 @@ describe("AgentManager — record GC", () => {
     const queuedId = manager.spawn(mockPi, mockCtx, "X", "waiter", { description: "waiter", isBackground: true });
     const queued = manager.getRecord(queuedId)!;
     expect(queued.status).toBe("queued");
-    queued.completedAt = Date.now() - 10 * TEN_MINUTES;
+    queued.completedAt = Date.now() - 10 * RECORD_RETENTION_MS;
 
     await vi.advanceTimersByTimeAsync(TICK * 5);
 
@@ -144,7 +143,7 @@ describe("AgentManager — record GC", () => {
     // later tick has to be collected too.
     manager = new AgentManager();
     const { id, record } = await settled("ages-out");
-    record.completedAt = Date.now() - (TEN_MINUTES - 3 * TICK);
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS - 3 * TICK);
 
     await vi.advanceTimersByTimeAsync(TICK);
     expect(manager.getRecord(id)).toBeDefined(); // still inside the window
@@ -179,7 +178,7 @@ describe("AgentManager — tombstones outliving the GC", () => {
     const record = manager.getRecord(id)!;
     await record.promise;
     record.sessionFile = sessionFile;
-    record.completedAt = Date.now() - (TEN_MINUTES + 30_000);
+    record.completedAt = Date.now() - (RECORD_RETENTION_MS + 30_000);
     return { id, record };
   }
 
@@ -242,7 +241,7 @@ describe("AgentManager — tombstones outliving the GC", () => {
       // Distinct ages so "oldest" is well defined; run-0 is the oldest. Set on
       // the record we just made — under fake timers every startedAt is equal,
       // so listAgents() has no meaningful order to index into.
-      record.completedAt = Date.now() - (TEN_MINUTES + 101_000 - i * 1000);
+      record.completedAt = Date.now() - (RECORD_RETENTION_MS + 101_000 - i * 1000);
     }
     await vi.advanceTimersByTimeAsync(TICK);
 

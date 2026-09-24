@@ -83,6 +83,15 @@ const DEFAULT_MAX_CONCURRENT_FOREGROUND = 0;
 const MAX_TOMBSTONES = 100;
 
 /**
+ * How long a settled record stays live after it finishes. Long enough that a
+ * caller can still read its result well after the run ended — the LLM is often
+ * several turns deep before it asks, and the completion notification can sit
+ * queued behind a long parent turn. Exported so tests age records against the
+ * real window instead of a copy that drifts.
+ */
+export const RECORD_RETENTION_MS = 30 * 60_000;
+
+/**
  * Validate a caller-supplied SpawnOptions.cwd. `undefined`/`null` mean "unset"
  * (parent cwd). Anything else must be an absolute path to an existing
  * directory — curated errors instead of TypeErrors from path/fs internals
@@ -451,7 +460,7 @@ export class AgentManager {
 
   /**
    * Evicted agents that can still be reached by name, keyed by handle. Outlives
-   * the 10-minute record cleanup — that timer exists to bound memory, not to
+   * the record retention sweep — that timer exists to bound memory, not to
    * expire a conversation the user might still want — and is cleared alongside
    * completed records on session start/switch.
    */
@@ -494,7 +503,7 @@ export class AgentManager {
     this.onUsage = onUsage;
     this.resultArtifactWriter = resultArtifactWriter;
     this.maxConcurrent = maxConcurrent;
-    // Cleanup completed agents after 10 minutes (but keep sessions for resume)
+    // Cleanup completed agents after RECORD_RETENTION_MS (but keep sessions for resume)
     this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
     this.cleanupInterval.unref();
   }
@@ -1909,7 +1918,7 @@ export class AgentManager {
   }
 
   private cleanup() {
-    const cutoff = Date.now() - 10 * 60_000;
+    const cutoff = Date.now() - RECORD_RETENTION_MS;
     for (const [id, record] of this.agents) {
       if (record.status === "running" || record.status === "queued") continue;
       if ((record.completedAt ?? 0) >= cutoff) continue;
@@ -1921,7 +1930,7 @@ export class AgentManager {
    * Remove all completed/stopped/errored records immediately.
    * Called on session start/switch so tasks from a prior session don't persist.
    * Pass skipUnconsumed=true to preserve records the LLM hasn't read yet
-   * (resultConsumed=false) — they will be evicted by the 10-minute cleanup timer instead.
+   * (resultConsumed=false) — they will be evicted by the cleanup timer instead.
    */
   clearCompleted(skipUnconsumed = false): void {
     for (const [id, record] of this.agents) {

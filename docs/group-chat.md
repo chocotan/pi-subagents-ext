@@ -4,6 +4,8 @@ For users who want several experts in one hosted conversation. While chat is **o
 
 A room is a seat list plus a shared log bound to **this session**, not the project cwd.
 
+Rooms are disabled by default. Set `"roomsEnabled": true` in the global or project `subagents.json`, or enable `/agents → Settings → Rooms`, then reload Pi. When disabled, room tools and `/chat` / `/room` commands are not registered, and saved bindings do not route input or add host instructions. Room files are preserved.
+
 ## Mental model
 
 ```text

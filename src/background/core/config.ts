@@ -7,7 +7,9 @@ export const PI_BG_FEATURE_VALUES = Object.freeze([
 ] as const);
 export type PiBackgroundFeature = (typeof PI_BG_FEATURE_VALUES)[number];
 
-export const PI_BG_DEFAULT_FEATURES = PI_BG_FEATURE_VALUES;
+export const PI_BG_DEFAULT_FEATURES = Object.freeze(
+  PI_BG_FEATURE_VALUES.filter((feature) => feature !== 'fusion'),
+);
 
 export const PI_BG_DOCK_SHORTCUT_VALUES = Object.freeze([
   'shift+down',
@@ -44,8 +46,8 @@ function invalidConfig(variable: string, reason: string, value: string): never {
   );
 }
 
-function parseFeatures(rawValue: string | undefined): PiBackgroundFeatureSelection {
-  const raw = rawValue ?? PI_BG_DEFAULT_FEATURES.join(',');
+function parseFeatures(rawValue: string | undefined, fusionEnabled: boolean): PiBackgroundFeatureSelection {
+  const raw = rawValue ?? (fusionEnabled ? PI_BG_FEATURE_VALUES : PI_BG_DEFAULT_FEATURES).join(',');
   const accepted = PI_BG_FEATURE_VALUES.join(',');
   if (raw.length === 0) {
     invalidConfig('PI_BG_FEATURES', `must not be empty; accepted tokens: ${accepted}`, raw);
@@ -108,8 +110,9 @@ function parseDockShortcut(rawValue: string | undefined): PiBackgroundDockShortc
 
 export function parseBackgroundTasksConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
+  fusionEnabled = false,
 ): PiBackgroundConfig {
-  const features = parseFeatures(env['PI_BG_FEATURES']);
+  const features = parseFeatures(env['PI_BG_FEATURES'], fusionEnabled);
   const dockShortcut = parseDockShortcut(env['PI_BG_DOCK_SHORTCUT']);
   return Object.freeze({ features, dockShortcut });
 }

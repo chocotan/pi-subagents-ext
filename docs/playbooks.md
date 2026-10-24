@@ -3,6 +3,8 @@
 For users and project authors who want reusable workflow guidance without maintaining JavaScript orchestration scripts.
 This guide covers `WORKFLOW.md`, prompt resources, `WorkflowPlaybook`, and confirmed promotion through `WorkflowPlaybookSave`; see [Scripted workflows](workflows.md) for deterministic JavaScript execution.
 
+Workflow tools are disabled by default. Set `"workflowsEnabled": true` in global or project `subagents.json`, or enable `/agents → Settings → Workflows`, then reload Pi to register the Playbook tools and scripted runtime.
+
 ## Mental model
 
 An adaptive Playbook is Markdown guidance for the main coordinator AI. It describes the outcome, useful perspectives, evidence standards, and ways to adapt to the request. It is not a program, a checklist that must always run, or an execution graph.
@@ -211,4 +213,4 @@ Then ask naturally — "review this diff", "research whether X", "audit src/ for
 - `WorkflowPlaybookSave` promotes generalized Markdown only after direct confirmation; it does not mine journals or generate a JavaScript workflow.
 - Promotion supports create/update for project and global Playbooks; delete and rename management are not part of this surface.
 - Deterministic JavaScript remains available through the separate `SubagentWorkflow` tool for user-explicit orchestration.
-- Markdown Playbook read/save tools remain available when `workflowsEnabled` disables the deterministic JavaScript runtime or that runtime yields to another orchestrator.
+- `workflowsEnabled: false` leaves both Markdown Playbook tools and the scripted runtime unregistered. When enabled, a runtime tool-name collision does not disable the Playbook tools.

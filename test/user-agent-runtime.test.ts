@@ -85,7 +85,7 @@ describe("no implicit executor", () => {
 
   it("captures the configured default before a detached workflow starts its children", async () => {
     const environment = hermeticDir({
-      settings: { defaultAgent: "first", outputTranscript: false },
+      settings: { defaultAgent: "first", outputTranscript: false, workflowsEnabled: true },
       agentFiles: { first: "---\ndescription: First\n---\nFirst.", second: "---\ndescription: Second\n---\nSecond." },
     });
     const booted = makePi();

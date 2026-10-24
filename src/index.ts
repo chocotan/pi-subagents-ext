@@ -1447,18 +1447,22 @@ export default function (pi: ExtensionAPI) {
   function isAcpEnabled(): boolean { return acpEnabled; }
   function setAcpEnabled(b: boolean): void { acpEnabled = b; }
 
-  // Master switch for scripted workflows. Defaults to ON. Off means the
+  let roomsEnabled = false;
+  function isRoomsEnabled(): boolean { return roomsEnabled; }
+  function setRoomsEnabled(b: boolean): void { roomsEnabled = b; }
+  let fusionEnabled = false;
+  function isFusionEnabled(): boolean { return fusionEnabled; }
+  function setFusionEnabled(b: boolean): void { fusionEnabled = b; }
+
+  // Master switch for workflow tools. Defaults to OFF. Off means the
   // `SubagentWorkflow` tool is never registered: the model is not told the
   // feature exists (zero context cost) and has nothing to call. The
   // `/agents → Workflows` view and `--subagents-workflow-file` are refused too, so
   // there is no second door into the same machinery.
   //
-  // `workflowsPinned` records that the answer came from the user — a boolean in
-  // subagents.json, or the settings toggle — rather than from this default. It
-  // is what `resolveWorkflowCollisions` checks before yielding to another
-  // extension's workflow tool: a default may be overridden by what else is
-  // loaded, an explicit choice may not.
-  let workflowsEnabled = true;
+  // Track an explicit setting separately so unrelated settings saves keep an
+  // absent key absent, and collision checks preserve the user's opt-in.
+  let workflowsEnabled = false;
   let workflowsPinned = false;
   function isWorkflowsEnabled(): boolean { return workflowsEnabled; }
   function isWorkflowsPinned(): boolean { return workflowsPinned; }
@@ -1705,7 +1709,7 @@ export default function (pi: ExtensionAPI) {
       if (currentCtx) restoreRoomStatus(currentCtx, roomHost());
     },
     readBinding() {
-      return roomBinding;
+      return roomsRegistered ? roomBinding : null;
     },
     appendRoomLine(line) {
       pi.appendEntry(ROOM_LINE_ENTRY_TYPE, line);
@@ -1720,7 +1724,6 @@ export default function (pi: ExtensionAPI) {
       return loadSettings(currentCtx?.cwd ?? process.cwd()).modelFallbacks ?? {};
     },
   });
-  registerGroupChat(pi, roomHost);
 
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
@@ -1785,6 +1788,8 @@ export default function (pi: ExtensionAPI) {
       setWidgetMode: setWidgetMode,
       setOutputTranscript: setOutputTranscriptDefault,
       setWorktreeIsolation: setWorktreeIsolationEnabled,
+      setRoomsEnabled,
+      setFusionEnabled,
       setWorkflowsEnabled: setWorkflowsEnabled,
       setMaxSubagentDepth: setMaxSubagentDepth,
       setDefaultAgent,
@@ -1795,6 +1800,9 @@ export default function (pi: ExtensionAPI) {
     },
     (event, payload) => pi.events.emit(event, payload),
   );
+
+  const roomsRegistered = isRoomsEnabled();
+  if (roomsRegistered) registerGroupChat(pi, roomHost);
 
   // ---- Agent tool ----
 
@@ -3678,11 +3686,11 @@ Terse command-style prompts produce shallow, generic work.
     },
   });
 
-  // Markdown Playbooks are adaptive coordinator guidance and remain available
-  // independently of the deterministic JavaScript runtime switch/collisions.
-  registerWorkflowPlaybookTools(pi);
-  registerWorkflowPlaybookSaveTool(pi);
-  if (isWorkflowsEnabled()) pi.registerTool(workflowTool);
+  if (isWorkflowsEnabled()) {
+    registerWorkflowPlaybookTools(pi);
+    registerWorkflowPlaybookSaveTool(pi);
+    pi.registerTool(workflowTool);
+  }
 
   /**
    * Act on {@link decideWorkflowCollision} — the half that needs the host.
@@ -4586,12 +4594,9 @@ Write the file using the write tool. Only write the file, nothing else.`;
       widgetMode: getWidgetMode(),
       outputTranscript: getOutputTranscriptDefault(),
       worktreeIsolation: isWorktreeIsolationEnabled(),
-      // The user's answer, not the effective one. A stand-down for another
-      // extension's workflow tool is scoped to the session it was detected in;
-      // writing it here would let an unrelated settings change three menus away
-      // freeze it into the file as an explicit `false`, which then survives
-      // uninstalling the extension it was deferring to. undefined is dropped by
-      // JSON.stringify, so unset stays unset.
+      roomsEnabled: isRoomsEnabled(),
+      fusionEnabled: isFusionEnabled(),
+      // JSON.stringify drops undefined, so an absent default stays absent.
       workflowsEnabled: isWorkflowsPinned() ? isWorkflowsEnabled() : undefined,
       maxSubagentDepth: getMaxSubagentDepth(),
       // Persist an explicit clear so a global default cannot reappear on reload.
@@ -4692,11 +4697,25 @@ Write the file using the write tool. Only write the file, nothing else.`;
           values: ["on", "off"],
         },
         {
+          id: "roomsEnabled",
+          label: "Rooms",
+          description: "Hosted rooms and Room tools (off by default; applies on next pi session)",
+          currentValue: isRoomsEnabled() ? "on" : "off",
+          values: ["on", "off"],
+        },
+        {
+          id: "fusionEnabled",
+          label: "Fusion",
+          description: "Fusion tools and commands (off by default; applies on next pi session; PI_BG_FEATURES overrides this)",
+          currentValue: isFusionEnabled() ? "on" : "off",
+          values: ["on", "off"],
+        },
+        {
           id: "workflowsEnabled",
           label: "Workflows",
           description:
-            "Scripted workflows, on unless another extension provides a workflow tool "
-            + "(off keeps the SubagentWorkflow tool out of the tool spec; applies on next pi session)",
+            "Scripted workflows and Markdown Playbook tools "
+            + "(off by default; applies on next pi session)",
           currentValue: isWorkflowsEnabled() ? "on" : "off",
           values: ["on", "off"],
         },
@@ -4886,6 +4905,12 @@ Write the file using the write tool. Only write the file, nothing else.`;
               : "External ACP agents disabled for this machine. New attempts are refused; current turns may finish.",
           );
         }
+      } else if (id === "roomsEnabled") {
+        setRoomsEnabled(value === "on");
+        notifyApplied(ctx, `Rooms ${value === "on" ? "enabled" : "disabled"}. Tool and command changes take effect on next pi session.`);
+      } else if (id === "fusionEnabled") {
+        setFusionEnabled(value === "on");
+        notifyApplied(ctx, `Fusion ${value === "on" ? "enabled" : "disabled"}. Takes effect on next pi session; PI_BG_FEATURES overrides this setting.`);
       } else if (id === "workflowsEnabled") {
         const enabled = value === "on";
         if (enabled === isWorkflowsEnabled()) {

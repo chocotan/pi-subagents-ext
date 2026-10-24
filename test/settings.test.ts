@@ -255,6 +255,18 @@ describe("settings persistence", () => {
     expect(loadSettings(projectDir)).toEqual({});
   });
 
+  it.each(["roomsEnabled", "fusionEnabled"] as const)("round-trips %s with project precedence and boolean validation", key => {
+    writeGlobal({ [key]: true });
+    expect(loadSettings(projectDir)).toEqual({ [key]: true });
+    saveSettings({ [key]: false }, projectDir);
+    expect(loadSettings(projectDir)).toEqual({ [key]: false });
+    saveSettings({ [key]: true }, projectDir);
+    expect(loadSettings(projectDir)).toEqual({ [key]: true });
+    writeGlobal({});
+    writeProject({ [key]: "on" });
+    expect(loadSettings(projectDir)).toEqual({});
+  });
+
   it("sanitize drops non-boolean schedulingEnabled silently", async () => {
     writeProject({ schedulingEnabled: "yes" } as any);
     expect(loadSettings(projectDir)).toEqual({});
@@ -576,6 +588,9 @@ describe("settings persistence", () => {
         setViewerMarkdown: vi.fn(),
         setOutputTranscript: vi.fn(),
         setWorktreeIsolation: vi.fn(),
+        setRoomsEnabled: vi.fn(),
+        setFusionEnabled: vi.fn(),
+        setWorkflowsEnabled: vi.fn(),
         setMaxSubagentDepth: vi.fn(),
         setDefaultAgent: vi.fn(),
         setReportUsage: vi.fn(),
@@ -595,6 +610,19 @@ describe("settings persistence", () => {
       vi.mocked(appliers.setMaxConcurrentForeground).mockClear();
       applySettings({}, appliers);
       expect(appliers.setMaxConcurrentForeground).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["roomsEnabled", "setRoomsEnabled"],
+      ["fusionEnabled", "setFusionEnabled"],
+      ["workflowsEnabled", "setWorkflowsEnabled"],
+    ] as const)("applies %s only when present", (key, setter) => {
+      applySettings({ [key]: true }, appliers);
+      expect(appliers[setter]).toHaveBeenLastCalledWith(true);
+      applySettings({ [key]: false }, appliers);
+      expect(appliers[setter]).toHaveBeenLastCalledWith(false);
+      applySettings({}, appliers);
+      expect(appliers[setter]).toHaveBeenCalledTimes(2);
     });
 
     it("applies reportUsage and showCost", () => {
@@ -835,6 +863,9 @@ describe("settings persistence", () => {
         setViewerMarkdown: vi.fn(),
         setOutputTranscript: vi.fn(),
         setWorktreeIsolation: vi.fn(),
+        setRoomsEnabled: vi.fn(),
+        setFusionEnabled: vi.fn(),
+        setWorkflowsEnabled: vi.fn(),
         setMaxSubagentDepth: vi.fn(),
         setDefaultAgent: vi.fn(),
         setReportUsage: vi.fn(),

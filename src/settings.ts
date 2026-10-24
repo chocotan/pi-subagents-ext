@@ -202,20 +202,20 @@ export interface SubagentsSettings {
    * scheduler and the unvalidated cross-extension RPC path.
    */
   worktreeIsolation?: boolean;
+  /** Hosted rooms, including /chat, /room and Room tools. Default false; reload to register. */
+  roomsEnabled?: boolean;
+  /** Fusion tools and commands. Default false; PI_BG_FEATURES overrides this at startup. */
+  fusionEnabled?: boolean;
   /**
-   * Master switch for scripted workflows. Defaults to `true`.
+   * Master switch for workflow tools, including Markdown Playbooks. Defaults to `false`.
    *
    * Off is not a soft hide: the `SubagentWorkflow` tool is never registered, so
    * the model is not told it exists and cannot call it, the `/agents`
    * Workflows entry is hidden, and `--subagents-workflow-file` is refused.
    *
-   * Absent is not the same as `true`. Unset means *auto*: on, but yielding to
-   * another extension that already offers a workflow tool, because two
-   * orchestrators in one tool spec is a worse default than none — the model
-   * has to guess which to call, and pays for both descriptions to find out.
-   * Setting it explicitly pins the answer in both directions: `true` keeps
-   * ours whatever else is loaded, `false` is off regardless. See
-   * `resolveWorkflowCollisions` in index.ts.
+   * Unset is off. Explicit `true` enables all three workflow tools and keeps
+   * our runtime alongside differently named workflow tools from other extensions.
+   * It cannot reclaim a tool name already registered by another extension.
    *
    * Read once at extension init, before registration, so flipping it in
    * `/agents → Settings` takes effect on the next pi session — the same
@@ -317,6 +317,8 @@ export interface SettingsAppliers {
   setWidgetMode: (mode: WidgetMode) => void;
   setOutputTranscript: (b: boolean) => void;
   setWorktreeIsolation: (b: boolean) => void;
+  setRoomsEnabled: (b: boolean) => void;
+  setFusionEnabled: (b: boolean) => void;
   setWorkflowsEnabled: (b: boolean) => void;
   setMaxSubagentDepth: (n: number) => void;
   setDefaultAgent: (v: string | undefined) => void;
@@ -455,6 +457,12 @@ function sanitize(raw: unknown): SubagentsSettings {
   if (typeof r.workflowsEnabled === "boolean") {
     out.workflowsEnabled = r.workflowsEnabled;
   }
+  if (typeof r.roomsEnabled === "boolean") {
+    out.roomsEnabled = r.roomsEnabled;
+  }
+  if (typeof r.fusionEnabled === "boolean") {
+    out.fusionEnabled = r.fusionEnabled;
+  }
   if (typeof r.defaultAgent === "string") {
     out.defaultAgent = r.defaultAgent.trim();
   }
@@ -549,6 +557,8 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.showModel === "boolean") appliers.setShowModel(s.showModel);
   if (s.viewerMarkdown) appliers.setViewerMarkdown(s.viewerMarkdown);
   if (typeof s.workflowsEnabled === "boolean") appliers.setWorkflowsEnabled(s.workflowsEnabled);
+  if (typeof s.roomsEnabled === "boolean") appliers.setRoomsEnabled(s.roomsEnabled);
+  if (typeof s.fusionEnabled === "boolean") appliers.setFusionEnabled(s.fusionEnabled);
 }
 
 /**

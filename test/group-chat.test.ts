@@ -247,13 +247,40 @@ describe("group-chat wiring", () => {
     hermetic = undefined;
   });
 
-  function boot() {
-    hermetic = hermeticDir({ testAgents: true, settings: { outputTranscript: false } });
+  function boot(settings: Record<string, unknown> = { roomsEnabled: true }) {
+    hermetic = hermeticDir({ testAgents: true, settings: { outputTranscript: false, ...settings } });
     const { pi, lifecycle, commands, tools } = makePi();
     subagentsExtension(pi);
     booted = lifecycle;
     return { lifecycle, commands, tools, pi };
   }
+
+  it.each([{}, { roomsEnabled: false }])("does not register rooms or restore their routing when disabled: %j", async settings => {
+    const { lifecycle, commands, tools } = boot(settings);
+    const store = new GroupStore(hermetic!.dir);
+    const room = store.create("saved", members);
+    const session = ctx({
+      cwd: hermetic!.dir,
+      sessionManager: {
+        getSessionId: () => "s1",
+        getBranch: () => [{
+          type: "custom", customType: "subagents:room",
+          data: { chat: true, roomId: room.id, leader: "main" },
+        }],
+      },
+    });
+    await lifecycle.get("session_start")!({}, session);
+
+    expect(commands.has("chat")).toBe(false);
+    expect(commands.has("room")).toBe(false);
+    for (const name of ["RoomEnsure", "RoomLeave", "room_tell", "handoff", "room_cancel"]) {
+      expect(tools.has(name)).toBe(false);
+    }
+    await lifecycle.get("input")!({ text: "hello saved room", source: "interactive" }, session);
+    expect(store.readLog(room.id)).toEqual([]);
+    const prompt = await lifecycle.get("before_agent_start")!({ prompt: "hello", systemPrompt: "base" }, session);
+    expect(prompt).toBeUndefined();
+  });
 
   it("registers /chat and RoomEnsure; bare text continues to the host", async () => {
     const { lifecycle, commands, tools } = boot();

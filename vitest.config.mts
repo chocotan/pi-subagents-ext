@@ -12,7 +12,7 @@ export default defineConfig({
   // subagent session the extension spawns. dedupe alone is insufficient (it only
   // affects modules Vite resolves; without inline the runtime stays externalized).
   test: {
-    setupFiles: ["./test/tasks/setup.ts"],
+    setupFiles: ["./test/tasks/setup.ts", "./test/setup-background.ts"],
     globalSetup: ["./test/tasks/global-setup.ts"],
     server: { deps: { inline: [/@earendil-works\/pi-/] } },
     // Local reporting only — deliberately no `thresholds`, and not wired into

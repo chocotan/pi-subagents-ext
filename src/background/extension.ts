@@ -11,6 +11,7 @@ import type {
 import { formatSize } from '@earendil-works/pi-coding-agent';
 import { Text, type KeyId } from '@earendil-works/pi-tui';
 import { Type, type Static } from 'typebox';
+import { loadSettings } from '../settings.js';
 import {
   DEFAULT_LOG_BYTES,
   MAX_LOG_BYTES,
@@ -206,7 +207,7 @@ function renderPlainResult(result: TextToolResult, options: ToolRenderResultOpti
 }
 
 export default async function backgroundTasksExtension(pi: ExtensionAPI): Promise<void> {
-  const config = parseBackgroundTasksConfig();
+  const config = parseBackgroundTasksConfig(process.env, loadSettings().fusionEnabled);
   const dockEntryHint = dockShortcutFooterHint(config.dockShortcut);
   const shellPolicy = initializeShellPolicy();
   const reloadShellOwner = getProcessReloadShellOwnerV1();

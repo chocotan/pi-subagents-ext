@@ -195,7 +195,7 @@ The script's final value is checked at the host boundary and can be a JSON-shape
 | Nested `workflow()` calls | 256 |
 | Script length | 512 KiB |
 
-`workflowsEnabled` is on by default and can be disabled in `subagents.json` or `/agents → Settings → Workflows`. Leaving it unset uses auto mode and stands down for the session if another extension provides `Workflow`, `workflow`, or `SubagentWorkflow`. See [Persistent settings](../README.md#persistent-settings).
+`workflowsEnabled` is off by default. Enable it in `subagents.json` or `/agents → Settings → Workflows`, then reload Pi. It controls `SubagentWorkflow`, `WorkflowPlaybook`, and `WorkflowPlaybookSave`; off also hides the workflow menu and refuses the startup CLI flag. Explicit `true` keeps the runtime alongside differently named workflow tools from other extensions, but cannot reclaim the same tool name if another extension registered first. See [Persistent settings](../README.md#persistent-settings).
 
 ## Migration
 
